@@ -45,11 +45,17 @@ export const EditDocumentForm = ({
   const searchParams = useSearchParams();
   const team = useOptionalCurrentTeam();
 
+  const sortById = (a: { id: number }, b: { id: number }) => {
+    return a.id - b.id;
+  };
+
   const [document, setDocument] = useState<DocumentWithDetails>(initialDocument);
-  const [recipients, setRecipients] = useState<Recipient[]>(initialDocument.Recipient);
+  const [recipients, setRecipients] = useState<Recipient[]>(
+    initialDocument.Recipient.toSorted(sortById),
+  );
   const [fields, setFields] = useState<Field[]>(initialDocument.Field);
 
-  const { data: fetchedDocument, refetch: refetchDocumentWithDetails } =
+  const { data: fetchedDocument, refetch: refetchDocument } =
     trpc.document.getDocumentWithDetailsById.useQuery(
       {
         id: document.id,
@@ -120,7 +126,6 @@ export const EditDocumentForm = ({
         title: data.title,
       });
 
-      // Quick update of the document state.
       setDocument({
         ...document,
         ...updatedDocument,
@@ -140,13 +145,13 @@ export const EditDocumentForm = ({
 
   const onAddSignersFormSubmit = async (data: TAddSignersFormSchema) => {
     try {
-      await addSigners({
+      const updatedRecipients = await addSigners({
         documentId: document.id,
         teamId: team?.id,
         signers: data.signers,
       });
 
-      await refetchDocument();
+      setRecipients(updatedRecipients);
 
       setStep('fields');
     } catch (err) {
@@ -162,12 +167,12 @@ export const EditDocumentForm = ({
 
   const onAddFieldsFormSubmit = async (data: TAddFieldsFormSchema) => {
     try {
-      await addFields({
+      const updatedFields = await addFields({
         documentId: document.id,
         fields: data.fields,
       });
 
-      await refetchDocument();
+      setFields(updatedFields);
 
       setStep('subject');
     } catch (err) {
@@ -225,17 +230,13 @@ export const EditDocumentForm = ({
   const currentDocumentFlow = documentFlow[step];
 
   /**
-   * Refetch the document and immediately update the state.
+   * Refresh the data in the background when steps change.
    */
-  const refetchDocument = async () => {
-    const { data } = await refetchDocumentWithDetails();
+  useEffect(() => {
+    void refetchDocument();
 
-    if (data) {
-      setDocument(data);
-      setRecipients(data.Recipient);
-      setFields(data.Field);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   /**
    * Update the data when document refresh occurs in the background.
@@ -243,7 +244,7 @@ export const EditDocumentForm = ({
   useEffect(() => {
     if (fetchedDocument) {
       setDocument(fetchedDocument);
-      setRecipients(fetchedDocument.Recipient);
+      setRecipients(fetchedDocument.Recipient.toSorted(sortById));
       setFields(fetchedDocument.Field);
     }
   }, [fetchedDocument]);
