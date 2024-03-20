@@ -1,18 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import {
-  type DocumentData,
-  type DocumentMeta,
-  DocumentStatus,
-  type Field,
-  type Recipient,
-  type User,
-} from '@documenso/prisma/client';
-import type { DocumentWithData } from '@documenso/prisma/types/document-with-data';
+import { DocumentStatus, type Field, type Recipient } from '@documenso/prisma/client';
+import type { DocumentWithDetails } from '@documenso/prisma/types/document';
 import { trpc } from '@documenso/trpc/react';
 import { cn } from '@documenso/ui/lib/utils';
 import { Card, CardContent } from '@documenso/ui/primitives/card';
@@ -34,12 +27,7 @@ import { useOptionalCurrentTeam } from '~/providers/team';
 
 export type EditDocumentFormProps = {
   className?: string;
-  user: User;
-  document: DocumentWithData;
-  recipients: Recipient[];
-  documentMeta: DocumentMeta | null;
-  fields: Field[];
-  documentData: DocumentData;
+  initialDocument: DocumentWithDetails;
   documentRootPath: string;
 };
 
@@ -48,12 +36,7 @@ const EditDocumentSteps: EditDocumentStep[] = ['title', 'signers', 'fields', 'su
 
 export const EditDocumentForm = ({
   className,
-  document,
-  recipients,
-  fields,
-  documentMeta,
-  user: _user,
-  documentData,
+  initialDocument,
   documentRootPath,
 }: EditDocumentFormProps) => {
   const { toast } = useToast();
@@ -61,6 +44,16 @@ export const EditDocumentForm = ({
   const router = useRouter();
   const searchParams = useSearchParams();
   const team = useOptionalCurrentTeam();
+
+  const [document, setDocument] = useState<DocumentWithDetails>(initialDocument);
+  const [recipients, setRecipients] = useState<Recipient[]>(initialDocument.Recipient);
+  const [fields, setFields] = useState<Field[]>(initialDocument.Field);
+
+  const { data: fetchDocument, refetch: refetchDocument } =
+    trpc.document.getDocumentWithDetailsById.useQuery({
+      id: document.id,
+      teamId: team?.id,
+    });
 
   const { mutateAsync: addTitle } = trpc.document.setTitleForDocument.useMutation();
   const { mutateAsync: addFields } = trpc.field.addFields.useMutation();
@@ -112,14 +105,17 @@ export const EditDocumentForm = ({
 
   const onAddTitleFormSubmit = async (data: TAddTitleFormSchema) => {
     try {
-      // Custom invocation server action
-      await addTitle({
+      const updatedDocument = await addTitle({
         documentId: document.id,
         teamId: team?.id,
         title: data.title,
       });
 
-      router.refresh();
+      // Quick update of the document state.
+      setDocument({
+        ...document,
+        ...updatedDocument,
+      });
 
       setStep('signers');
     } catch (err) {
@@ -135,14 +131,14 @@ export const EditDocumentForm = ({
 
   const onAddSignersFormSubmit = async (data: TAddSignersFormSchema) => {
     try {
-      // Custom invocation server action
       await addSigners({
         documentId: document.id,
         teamId: team?.id,
         signers: data.signers,
       });
 
-      router.refresh();
+      await refetchDocument();
+
       setStep('fields');
     } catch (err) {
       console.error(err);
@@ -157,13 +153,13 @@ export const EditDocumentForm = ({
 
   const onAddFieldsFormSubmit = async (data: TAddFieldsFormSchema) => {
     try {
-      // Custom invocation server action
       await addFields({
         documentId: document.id,
         fields: data.fields,
       });
 
-      router.refresh();
+      await refetchDocument();
+
       setStep('subject');
     } catch (err) {
       console.error(err);
@@ -219,6 +215,26 @@ export const EditDocumentForm = ({
 
   const currentDocumentFlow = documentFlow[step];
 
+  /**
+   * Update the data when document refresh occurs.
+   */
+  useEffect(() => {
+    if (fetchDocument) {
+      setDocument(fetchDocument);
+      setRecipients(fetchDocument.Recipient);
+      setFields(fetchDocument.Field);
+    }
+  }, [fetchDocument]);
+
+  /**
+   * Refresh the data in the background when steps change.
+   */
+  useEffect(() => {
+    void refetchDocument();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   return (
     <div className={cn('grid w-full grid-cols-12 gap-8', className)}>
       <Card
@@ -227,10 +243,10 @@ export const EditDocumentForm = ({
       >
         <CardContent className="p-2">
           <LazyPDFViewer
-            key={documentData.id}
-            documentData={documentData}
+            key={document.documentData.id}
+            documentData={document.documentData}
             document={document}
-            password={documentMeta?.password}
+            password={document.documentMeta?.password}
             onPasswordSubmit={onPasswordSubmit}
           />
         </CardContent>
