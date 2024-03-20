@@ -82,6 +82,13 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
       },
       {
         keepPreviousData: true,
+        // Do not batch this due to relatively long request time compared to
+        // other queries which are generally batched with this.
+        trpc: {
+          context: {
+            skipBatch: true,
+          },
+        },
       },
     );
 

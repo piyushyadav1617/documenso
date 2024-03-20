@@ -49,11 +49,20 @@ export const EditDocumentForm = ({
   const [recipients, setRecipients] = useState<Recipient[]>(initialDocument.Recipient);
   const [fields, setFields] = useState<Field[]>(initialDocument.Field);
 
-  const { data: fetchDocument, refetch: refetchDocument } =
-    trpc.document.getDocumentWithDetailsById.useQuery({
-      id: document.id,
-      teamId: team?.id,
-    });
+  const { data: fetchedDocument, refetch: refetchDocumentWithDetails } =
+    trpc.document.getDocumentWithDetailsById.useQuery(
+      {
+        id: document.id,
+        teamId: team?.id,
+      },
+      {
+        trpc: {
+          context: {
+            skipBatch: true,
+          },
+        },
+      },
+    );
 
   const { mutateAsync: addTitle } = trpc.document.setTitleForDocument.useMutation();
   const { mutateAsync: addFields } = trpc.field.addFields.useMutation();
@@ -216,24 +225,28 @@ export const EditDocumentForm = ({
   const currentDocumentFlow = documentFlow[step];
 
   /**
-   * Update the data when document refresh occurs.
+   * Refetch the document and immediately update the state.
    */
-  useEffect(() => {
-    if (fetchDocument) {
-      setDocument(fetchDocument);
-      setRecipients(fetchDocument.Recipient);
-      setFields(fetchDocument.Field);
+  const refetchDocument = async () => {
+    const { data } = await refetchDocumentWithDetails();
+
+    if (data) {
+      setDocument(data);
+      setRecipients(data.Recipient);
+      setFields(data.Field);
     }
-  }, [fetchDocument]);
+  };
 
   /**
-   * Refresh the data in the background when steps change.
+   * Update the data when document refresh occurs in the background.
    */
   useEffect(() => {
-    void refetchDocument();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+    if (fetchedDocument) {
+      setDocument(fetchedDocument);
+      setRecipients(fetchedDocument.Recipient);
+      setFields(fetchedDocument.Field);
+    }
+  }, [fetchedDocument]);
 
   return (
     <div className={cn('grid w-full grid-cols-12 gap-8', className)}>
