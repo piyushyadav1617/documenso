@@ -12,7 +12,24 @@ import { getBaseUrl } from '@documenso/lib/universal/get-base-url';
 
 import type { AppRouter } from '../server/router';
 
-export const trpc = createTRPCReact<AppRouter>();
+export const trpc = createTRPCReact<AppRouter>({
+  overrides: {
+    useMutation: {
+      async onSuccess(opts) {
+        await opts.originalFn();
+
+        if (opts.meta.skipQuery) {
+          return;
+        }
+
+        // Do not invalidate queries that have `meta.skipInvalidation` set to true.
+        await opts.queryClient.invalidateQueries({
+          predicate: (query) => !query?.meta?.skipInvalidation,
+        });
+      },
+    },
+  },
+});
 
 export interface TrpcProviderProps {
   children: React.ReactNode;

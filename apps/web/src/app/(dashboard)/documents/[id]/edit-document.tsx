@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import { SKIP_MUTATION_QUERY_INVALIDATION } from '@documenso/lib/constants/trpc';
 import { DocumentStatus, type Field, type Recipient } from '@documenso/prisma/client';
 import type { DocumentWithDetails } from '@documenso/prisma/types/document';
 import { trpc } from '@documenso/trpc/react';
@@ -51,7 +52,7 @@ export const EditDocumentForm = ({
 
   const [document, setDocument] = useState<DocumentWithDetails>(initialDocument);
   const [recipients, setRecipients] = useState<Recipient[]>(
-    initialDocument.Recipient.toSorted(sortById),
+    initialDocument.Recipient.sort(sortById),
   );
   const [fields, setFields] = useState<Field[]>(initialDocument.Field);
 
@@ -70,12 +71,25 @@ export const EditDocumentForm = ({
       },
     );
 
-  const { mutateAsync: addTitle } = trpc.document.setTitleForDocument.useMutation();
-  const { mutateAsync: addFields } = trpc.field.addFields.useMutation();
-  const { mutateAsync: addSigners } = trpc.recipient.addSigners.useMutation();
-  const { mutateAsync: sendDocument } = trpc.document.sendDocument.useMutation();
-  const { mutateAsync: setPasswordForDocument } =
-    trpc.document.setPasswordForDocument.useMutation();
+  const { mutateAsync: addTitle } = trpc.document.setTitleForDocument.useMutation(
+    SKIP_MUTATION_QUERY_INVALIDATION,
+  );
+
+  const { mutateAsync: addFields } = trpc.field.addFields.useMutation(
+    SKIP_MUTATION_QUERY_INVALIDATION,
+  );
+
+  const { mutateAsync: addSigners } = trpc.recipient.addSigners.useMutation(
+    SKIP_MUTATION_QUERY_INVALIDATION,
+  );
+
+  const { mutateAsync: sendDocument } = trpc.document.sendDocument.useMutation(
+    SKIP_MUTATION_QUERY_INVALIDATION,
+  );
+
+  const { mutateAsync: setPasswordForDocument } = trpc.document.setPasswordForDocument.useMutation(
+    SKIP_MUTATION_QUERY_INVALIDATION,
+  );
 
   const documentFlow: Record<EditDocumentStep, DocumentFlowStep> = {
     title: {
@@ -244,7 +258,7 @@ export const EditDocumentForm = ({
   useEffect(() => {
     if (fetchedDocument) {
       setDocument(fetchedDocument);
-      setRecipients(fetchedDocument.Recipient.toSorted(sortById));
+      setRecipients(fetchedDocument.Recipient.sort(sortById));
       setFields(fetchedDocument.Field);
     }
   }, [fetchedDocument]);
